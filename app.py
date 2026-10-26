@@ -1,17 +1,12 @@
+import os
 import streamlit as st
-from datetime import datetime
+from groq import Groq
 
 st.set_page_config(
     page_title="ODIN AI",
     page_icon="⚡",
     layout="wide"
 )
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "created_at" not in st.session_state:
-    st.session_state.created_at = datetime.now().strftime("%d/%m/%Y")
 
 st.markdown("""
 <style>
@@ -27,43 +22,44 @@ h1, h2, h3 {
 }
 .stChatMessage {
     background: #151e31;
-    border: 1px solid #273449;
     border-radius: 14px;
-    padding: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
 
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 with st.sidebar:
     st.title("⚡ ODIN AI")
-    st.caption("Sua plataforma de inteligência artificial")
+    st.caption("Sua inteligência artificial")
     st.divider()
 
     if st.button("＋ Nova conversa", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
-    st.subheader("Painel")
-    st.write("🧠 Inteligência artificial")
+    st.write("🧠 Motor: Groq")
     st.write("💬 Conversas")
-    st.write("⚙️ Configurações")
-    st.divider()
-    st.caption("Versão inicial • 0.1")
+    st.caption("Versão 0.2")
 
 st.title("⚡ ODIN AI")
-st.write("Uma central de inteligência artificial construída por você.")
-st.info(
-    "Interface inicial pronta para receber a integração "
-    "com um modelo de IA."
-)
+st.write("Sua central de inteligência artificial.")
 
-st.subheader("Conversa")
+api_key = os.environ.get("GROQ_API_KEY")
+
+if not api_key:
+    st.error(
+        "Chave não configurada. Adicione GROQ_API_KEY "
+        "nas variáveis de ambiente do Render."
+    )
+    st.stop()
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-prompt = st.chat_input("Escreva sua mensagem...")
+prompt = st.chat_input("Pergunte qualquer coisa...")
 
 if prompt:
     st.session_state.messages.append({
@@ -74,16 +70,46 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    answer = (
-        "Recebi sua mensagem! A interface da ODIN AI está funcionando, "
-        "mas ainda precisamos conectar um modelo de inteligência "
-        "artificial para gerar respostas reais."
-    )
-
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": answer
-    })
-
     with st.chat_message("assistant"):
-        st.markdown(answer)
+        with st.spinner("ODIN está pensando..."):
+            try:
+                client = Groq(api_key=api_key)
+
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Você é a ODIN AI, uma assistente "
+                                "inteligente, útil e honesta. "
+                                "Responda no idioma do usuário. "
+                                "Explique claramente suas limitações."
+                            )
+                        },
+                        *st.session_state.messages[-20:]
+                    ],
+                    max_completion_tokens=1024,
+                    temperature=0.7,
+                    timeout=60
+                )
+
+                answer = (
+                    response.choices[0].message.content
+                    or "Não consegui gerar uma resposta."
+                )
+
+                st.markdown(answer)
+
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": answer
+                })
+
+            except Exception as error:
+                st.error(
+                    "Não consegui consultar a IA. "
+                    "Verifique os logs do Render e os limites "
+                    "ou a disponibilidade do modelo na Groq."
+                )
+                print(f"Erro na API da Groq: {type(error).__name__}")
